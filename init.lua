@@ -9,20 +9,22 @@ local teleporter = {}
 local function debug()
 	minetest.sound_play(mcl_sounds.node_sound_metal_defaults().dig, {pos=pos, max_hear_distance=16}, true)
 end
+local function debug2()
+	minetest.sound_play(mcl_sounds.node_sound_stone_defaults().dig, {pos=pos, max_hear_distance=16}, true)
+end
 
 teleporter.connect = function(pos, ingot)
 	if not sum_teleporters.connections[ingot] then sum_teleporters.connections[ingot] = {pos, nil} end
 	local connection = sum_teleporters.connections[ingot]
 	if not connection then return false end
 	if pos ~= connection[0] and pos ~= connection[1] then
-		if connection[0] == nil then
-			connection[0] = pos
-		else
-			connection[1] = pos
-		end
+		connection[1] = connection[0]
+		connection[0] = pos
+		debug2()
 	end
 	local meta = minetest.get_meta(pos)
 	meta:set_string("ingot", ingot)
+	sum_teleporters.connections[ingot] = connection
 	return connection
 end
 
@@ -32,12 +34,13 @@ teleporter.disconnect = function(pos, ingot)
 	if not connection then return false end
 	if pos == connection[0] then
 		connection[0] = nil
-	else
+	elseif pos == connection[1] then
 		connection[1] = nil
 	end
 	local meta = minetest.get_meta(pos)
 	meta:set_string("ingot", "")
 	debug()
+	sum_teleporters.connections[ingot] = connection
 	return connection
 end
 
@@ -50,6 +53,7 @@ teleporter.activate = function(pos, node, player, itemstack, pointed_thing,  ing
 
 	if can_activate then
 		local x = teleporter.connect(pos, ingot)
+		if not x then debug() end
 	end
 end
 
@@ -64,17 +68,24 @@ teleporter.teleport = function(pos, node, player, itemstack, pointed_thing,  ing
 	local radius = 3
 
 	local connection = sum_teleporters.connections[ingot]
-	if not connection then return false end
+	if not connection then
+		sum_teleporters.connections[ingot] = {nil, nil}
+		debug()
+		return false
+	end
 	local destination = pos
 	if connection[0] == pos then destination = connection[1]
 	else destination = connection[0] end
-	if not destination then return false end
+	if not destination then
+		debug2()
+		return false
+	end
 
 	if not (connection and (connection[0] and connection[1])) then
 		debug()
 		return false
 	end
-
+	debug2()
 	for _, player in minetest.get_connected_players() do
 		local dist = vector.distance(player:get_pos(), pos)
 		if dist < radius then
@@ -137,7 +148,7 @@ minetest.register_node("sum_teleporters:teleporter", {
 				teleporter.activate(pos, node, player, itemstack, pointed_thing, wielded_item)
 			elseif ingot then
 				local x = teleporter.teleport(pos, node, player, itemstack, pointed_thing, ingot)
-				if not x then debug() end
+				-- if not x then debug() end
 			end
 		end
 	end,
