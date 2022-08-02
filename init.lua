@@ -2,7 +2,6 @@ local S = minetest.get_translator(minetest.get_current_modname())
 
 sum_teleporters = {
 	connections = {},
-	data = {},
 }
 
 local teleporter = {}
@@ -22,7 +21,8 @@ teleporter.connect = function(pos, ingot)
 			connection[1] = pos
 		end
 	end
-	sum_teleporters.data[pos].ingot = ingot
+	local meta = minetest.get_meta(pos)
+	meta:set_string("ingot", ingot)
 	return connection
 end
 
@@ -35,7 +35,8 @@ teleporter.disconnect = function(pos, ingot)
 	else
 		connection[1] = nil
 	end
-	sum_teleporters.data[pos].ingot = nil
+	local meta = minetest.get_meta(pos)
+	meta:set_string("ingot", "")
 	debug()
 	return connection
 end
@@ -69,9 +70,8 @@ teleporter.teleport = function(pos, node, player, itemstack, pointed_thing,  ing
 	else destination = connection[0] end
 	if not destination then return false end
 
-	debug()
 	if not (connection and (connection[0] and connection[1])) then
-
+		debug()
 		return false
 	end
 
@@ -129,18 +129,14 @@ minetest.register_node("sum_teleporters:teleporter", {
 	paramtype2 = "facedir",
 	groups = {handy=1,axey=1,deco_block=1,flammable=-1},
 	on_rightclick = function (pos, node, player, itemstack, pointed_thing)
-		if not sum_teleporters.data[pos] then
-			sum_teleporters.data[pos] = {
-				ingot = nil,
-				active = false,
-			}
-		end
 		if not player:get_player_control().sneak then
+			local meta = minetest.get_meta(pos)
+			local ingot = meta:get_string("ingot")
 			local wielded_item = player:get_wielded_item():get_name()
-			if is_in(wielded_item, activate_item_list) then
-				teleporter.activate(pos, node, player, itemstack, pointed_thing,  wielded_item)
-			else
-				local x = teleporter.teleport(pos, node, player, itemstack, pointed_thing, sum_teleporters.data[pos].ingot)
+			if is_in(wielded_item, activate_item_list) and not ingot then
+				teleporter.activate(pos, node, player, itemstack, pointed_thing, wielded_item)
+			elseif ingot then
+				local x = teleporter.teleport(pos, node, player, itemstack, pointed_thing, ingot)
 				if not x then debug() end
 			end
 		end
