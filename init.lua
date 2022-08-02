@@ -20,11 +20,13 @@ end
 teleporter.get_destination = function(pos)
 	if not pos then return nil end
 	local meta = minetest.get_meta(pos)
-	return {
-		x = meta:get_string("destination_x"),
-		y = meta:get_string("destination_y"),
-		z = meta:get_string("destination_z")
+	local p = {
+		x = tonumber(meta:get_string("destination_x")),
+		y = tonumber(meta:get_string("destination_y")),
+		z = tonumber(meta:get_string("destination_z"))
 	}
+	if not p.x or not p.y or not p.z then return nil
+	else return p end
 end
 teleporter.set_destination = function(pos, destination)
 	if not pos or not destination then return false end
@@ -35,7 +37,7 @@ teleporter.set_destination = function(pos, destination)
 	return true
 end
 
-teleporter.set_meta(pos, data)
+teleporter.set_meta = function(pos, data)
 	local meta = minetest.get_meta(pos)
 	for key, value in pairs(data) do
 		meta:set_string(key, value)
@@ -44,19 +46,19 @@ end
 
 teleporter.set_link = function(pos, ingot, player)
 	teleporter.set_meta(pos, {
-		"ingot" = ingot,
-		"state" = "disabled",
+		ingot = ingot,
+		state = "disabled",
 	})
 end
 
 teleporter.connect = function(pos, ingot, player)
-	teleporter.set_meta(pos, {"ingot" = ingot})
+	teleporter.set_meta(pos, {ingot = ingot})
 	local connections = sum_teleporters.connections[player]
 	if connections and connections.ingot and connections.pos then
 		teleporter.set_destination(connections.pos, pos)
 		teleporter.set_destination(pos, connections.pos)
-		teleporter.set_meta(pos, { "state" = "enabled" })
-		teleporter.set_meta(connections.pos, { "state" = "enabled" })
+		teleporter.set_meta(pos, { state = "enabled" })
+		teleporter.set_meta(connections.pos, { state = "enabled" })
 		sum_teleporters.connections[player] = nil
 	end
 end
@@ -66,8 +68,10 @@ teleporter.disconnect = function(pos, player)
 	meta:set_string("ingot", "")
 	meta:set_string("state", "disabled")
 	local dest_pos = teleporter.get_destination(pos)
-	if dest_pos then teleporter.disconnect(dest_pos)
-	sum_teleporters.connections[player] = {ingot = nil, pos = nil}
+	if dest_pos then
+		teleporter.disconnect(dest_pos)
+		sum_teleporters.connections[player] = {ingot = nil, pos = nil}
+	end
 end
 
 teleporter.on_used = function(pos, node, player, itemstack, pointed_thing, ingot)
@@ -76,7 +80,7 @@ teleporter.on_used = function(pos, node, player, itemstack, pointed_thing, ingot
 	local has_ingot = meta:get_string("ingot")
 	local wielded_item = player:get_wielded_item():get_name()
 
-	if is_in(wielded_item, activate_item_list) and not has_ingot then
+	if teleporter.is_item_in_list(wielded_item, activate_item_list) and not has_ingot then
 		local last_link = sum_teleporters.connections[player]
 		local last_link_ingot = nil
 		if last_link then last_link_ingot = last_link.ingot end
@@ -100,12 +104,12 @@ teleporter.teleport = function(pos, node, player, itemstack, pointed_thing, ingo
 	local radius = 3
 
 	local destination = teleporter.get_destination(pos)
-	if not destination then
+	if not destination or destination == {x=nil,y=nil,z=nil} then
 		debug2()
 		return false
 	end
 
-	for _, player in minetest.get_connected_players() do
+	for _, player in pairs(minetest.get_connected_players()) do
 		local dist = vector.distance(player:get_pos(), pos)
 		if dist < radius then
 			local offset = vector.subtract(pos, player:get_pos())
@@ -115,7 +119,7 @@ teleporter.teleport = function(pos, node, player, itemstack, pointed_thing, ingo
 	return true
 end
 
-local function is_in(item, list)
+teleporter.is_item_in_list = function(item, list)
 	if not item or not list then return false end
 	local has_found = false
 	for _, value in pairs(list) do
