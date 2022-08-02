@@ -2,6 +2,7 @@ local S = minetest.get_translator(minetest.get_current_modname())
 
 sum_teleporters = {
 	connections = {},
+	data = {},
 }
 
 local teleporter = {}
@@ -15,13 +16,13 @@ teleporter.connect = function(pos, ingot)
 	local connection = sum_teleporters.connections[ingot]
 	if not connection then return false end
 	if pos ~= connection[0] and pos ~= connection[1] then
-		if connection[0] ~= nil then
+		if connection[0] == nil then
 			connection[0] = pos
 		else
 			connection[1] = pos
 		end
-	else debug()
 	end
+	sum_teleporters.data[pos].ingot = ingot
 	return connection
 end
 
@@ -34,6 +35,8 @@ teleporter.disconnect = function(pos, ingot)
 	else
 		connection[1] = nil
 	end
+	sum_teleporters.data[pos].ingot = nil
+	debug()
 	return connection
 end
 
@@ -65,6 +68,12 @@ teleporter.teleport = function(pos, node, player, itemstack, pointed_thing,  ing
 	if connection[0] == pos then destination = connection[1]
 	else destination = connection[0] end
 	if not destination then return false end
+
+	debug()
+	if not (connection and (connection[0] and connection[1])) then
+
+		return false
+	end
 
 	for _, player in minetest.get_connected_players() do
 		local dist = vector.distance(player:get_pos(), pos)
@@ -103,6 +112,8 @@ local activate_item_list = {
 	"mcl_core:gold_ingot",
 	"mcl_core:netherite_ingot"}
 
+
+
 minetest.register_node("sum_teleporters:teleporter", {
 	description = S("Teleporter"),
 	_tt_help = S("Teleports the player and entities"),
@@ -118,12 +129,18 @@ minetest.register_node("sum_teleporters:teleporter", {
 	paramtype2 = "facedir",
 	groups = {handy=1,axey=1,deco_block=1,flammable=-1},
 	on_rightclick = function (pos, node, player, itemstack, pointed_thing)
+		if not sum_teleporters.data[pos] then
+			sum_teleporters.data[pos] = {
+				ingot = nil,
+				active = false,
+			}
+		end
 		if not player:get_player_control().sneak then
 			local wielded_item = player:get_wielded_item():get_name()
 			if is_in(wielded_item, activate_item_list) then
 				teleporter.activate(pos, node, player, itemstack, pointed_thing,  wielded_item)
 			else
-				local x = teleporter.teleport(pos, node, player, itemstack, pointed_thing, ingot)
+				local x = teleporter.teleport(pos, node, player, itemstack, pointed_thing, sum_teleporters.data[pos].ingot)
 				if not x then debug() end
 			end
 		end
@@ -133,9 +150,4 @@ minetest.register_node("sum_teleporters:teleporter", {
 	groups = {pickaxey=5, building_block=1, material_stone=1},
 	_mcl_blast_resistance = 1200,
 	_mcl_hardness = 50,
-	teleporter = {
-		active = false,
-		ingot = nil,
-		destination = nil,
-	}
 })
