@@ -35,16 +35,28 @@ teleporter.set_destination = function(pos, destination)
 	return true
 end
 
-teleporter.connect = function(pos, ingot, player)
+teleporter.set_meta(pos, data)
 	local meta = minetest.get_meta(pos)
-	meta:set_string("ingot", ingot)
-	meta:set_string("state", "enabled")
+	for key, value in pairs(data) do
+		meta:set_string(key, value)
+	end
+end
+
+teleporter.set_link = function(pos, ingot, player)
+	teleporter.set_meta(pos, {
+		"ingot" = ingot,
+		"state" = "disabled",
+	})
+end
+
+teleporter.connect = function(pos, ingot, player)
+	teleporter.set_meta(pos, {"ingot" = ingot})
 	local connections = sum_teleporters.connections[player]
-	if not connections then
-		connections = {ingot = ingot, pos = pos}
-	elseif connections and connections.ingot and connections.pos then
+	if connections and connections.ingot and connections.pos then
 		teleporter.set_destination(connections.pos, pos)
 		teleporter.set_destination(pos, connections.pos)
+		teleporter.set_meta(pos, { "state" = "enabled" })
+		teleporter.set_meta(connections.pos, { "state" = "enabled" })
 		sum_teleporters.connections[player] = nil
 	end
 end
@@ -58,20 +70,33 @@ teleporter.disconnect = function(pos, player)
 	sum_teleporters.connections[player] = {ingot = nil, pos = nil}
 end
 
-teleporter.activate = function(pos, node, player, itemstack, pointed_thing, ingot)
-	local connection = sum_teleporters.connections[player]
-	local last_link_ingot = nil
-	if connection then last_link_ingot = connection.ingot end
+teleporter.on_used = function(pos, node, player, itemstack, pointed_thing, ingot)
 
-	if last_link_ingot == ingot then
-		teleporter.connect(pos, ingot, player)
+	local meta = minetest.get_meta(pos)
+	local has_ingot = meta:get_string("ingot")
+	local wielded_item = player:get_wielded_item():get_name()
+
+	if is_in(wielded_item, activate_item_list) and not has_ingot then
+		local last_link = sum_teleporters.connections[player]
+		local last_link_ingot = nil
+		if last_link then last_link_ingot = last_link.ingot end
+
+		-- if you activated a teleporter before with this ingot type, connect them
+		if last_link_ingot == ingot then
+			teleporter.connect(pos, ingot, player)
+		else
+			teleporter.set_link(pos, ingot, player)
+			debug2()
+		end
+	else
+		teleporter.teleport(pos, node, player, itemstack, pointed_thing, ingot)
 	end
 end
 
 teleporter.deactivate = function(pos, ingot)
 end
 
-teleporter.teleport = function(pos, node, player, itemstack, pointed_thing,  ingot)
+teleporter.teleport = function(pos, node, player, itemstack, pointed_thing, ingot)
 	local radius = 3
 
 	local destination = teleporter.get_destination(pos)
@@ -136,15 +161,7 @@ minetest.register_node("sum_teleporters:teleporter", {
 	groups = {handy=1,axey=1,deco_block=1,flammable=-1},
 	on_rightclick = function (pos, node, player, itemstack, pointed_thing)
 		if not player:get_player_control().sneak then
-			local meta = minetest.get_meta(pos)
-			local ingot = meta:get_string("ingot")
-			local wielded_item = player:get_wielded_item():get_name()
-			if is_in(wielded_item, activate_item_list) and not ingot then
-				teleporter.activate(pos, node, player, itemstack, pointed_thing, wielded_item)
-			elseif ingot then
-				local x = teleporter.teleport(pos, node, player, itemstack, pointed_thing, ingot)
-				-- if not x then debug() end
-			end
+			teleporter.on_used(pos, node, player, itemstack, pointed_thing, wielded_item)
 		end
 	end,
 	sounds = mcl_sounds.node_sound_stone_defaults(),
